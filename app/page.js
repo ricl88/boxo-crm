@@ -521,6 +521,45 @@ export default function Home() {
       .update(updates)
       .eq('id', stepId);
 
+    // Find the order this step belongs to and check if all steps are now complete
+    const step = orders.flatMap(o => o.steps || []).find(s => s.id === stepId);
+    if (step) {
+      const order = orders.find(o => o.id === step.order_id);
+      if (order && order.order_type !== 'task') {
+        // Reload steps to check completion
+        const { data: updatedSteps } = await supabase
+          .from('order_steps')
+          .select('*')
+          .eq('order_id', order.id);
+        
+        const allComplete = updatedSteps?.every(s => s.is_completed);
+        
+        if (allComplete) {
+          // Get the last step's text (copy step)
+          const copyStep = updatedSteps.find(s => s.step_type === 'copy');
+          
+          // Create ad in library
+          await supabase
+            .from('ads')
+            .insert({
+              name: order.ad_name || order.product?.name || 'Ny annonse',
+              product_id: order.product_id,
+              ad_type: order.order_type,
+              status: 'ready',
+              primary_text: copyStep?.primary_text || primaryText,
+              headline: copyStep?.headline || headline,
+              completion_date: new Date().toISOString(),
+            });
+
+          // Mark order as completed
+          await supabase
+            .from('orders')
+            .update({ is_completed: true })
+            .eq('id', order.id);
+        }
+      }
+    }
+
     // Reload data
     loadAppData();
   }
@@ -814,6 +853,8 @@ function TasksPage({ tasks, team, onComplete }) {
 function OrderPage({ products, team, currentUser, onOrderCreated }) {
   const [orderType, setOrderType] = useState('video');
   const [productId, setProductId] = useState('');
+  const [adName, setAdName] = useState('');
+  const [comment, setComment] = useState('');
   const [description, setDescription] = useState('');
   const [steps, setSteps] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -873,7 +914,7 @@ function OrderPage({ products, team, currentUser, onOrderCreated }) {
       await supabase
         .from('ads')
         .insert({
-          name: product?.name || 'Ny annonse',
+          name: adName || product?.name || 'Ny annonse',
           product_id: parseInt(productId),
           ad_type: orderType,
           status: 'ready',
@@ -881,6 +922,8 @@ function OrderPage({ products, team, currentUser, onOrderCreated }) {
         });
       
       setProductId('');
+      setAdName('');
+      setComment('');
       setDescription('');
       setOrderType('video');
       setSubmitting(false);
@@ -895,7 +938,8 @@ function OrderPage({ products, team, currentUser, onOrderCreated }) {
       .insert({
         product_id: productId ? parseInt(productId) : null,
         order_type: orderType,
-        description: description || null,
+        description: comment || description || null,
+        ad_name: adName || null,
         created_by: currentUser?.id,
       })
       .select()
@@ -923,6 +967,8 @@ function OrderPage({ products, team, currentUser, onOrderCreated }) {
 
     // Reset form
     setProductId('');
+    setAdName('');
+    setComment('');
     setDescription('');
     setOrderType('video');
     setSubmitting(false);
@@ -979,6 +1025,27 @@ function OrderPage({ products, team, currentUser, onOrderCreated }) {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+
+          <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+            Annonsenavn (valgfritt)
+          </label>
+          <input
+            type="text"
+            value={adName}
+            onChange={e => setAdName(e.target.value)}
+            placeholder="Gi annonsen et navn..."
+            style={{ ...styles.input, marginBottom: '16px' }}
+          />
+
+          <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+            Kommentar (valgfritt)
+          </label>
+          <textarea
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            placeholder="Legg til kommentar til bestillingen..."
+            style={{ ...styles.input, minHeight: '60px', marginBottom: '16px', resize: 'vertical', borderRadius: '16px' }}
+          />
         </>
       )}
 
@@ -1432,6 +1499,17 @@ function SettingsPage({ team, currentUser, products, onUpdate, onLogout, onTeamU
     onUpdate();
   }
 
+  async function deleteUser(userId) {
+    if (!confirm('Er du sikker på at du vil slette denne brukeren?')) return;
+
+    await supabase
+      .from('team_members')
+      .delete()
+      .eq('id', userId);
+
+    onTeamUpdate();
+  }
+
   const permissions = [
     { key: 'can_film', label: 'Filming' },
     { key: 'can_edit', label: 'Klipping' },
@@ -1681,20 +1759,38 @@ function SettingsPage({ team, currentUser, products, onUpdate, onLogout, onTeamU
                 </div>
               </div>
               {editingPin !== member.id && (
-                <button
-                  onClick={() => { setEditingPin(member.id); setNewPin(member.pin); }}
-                  style={{
-                    padding: '6px 14px',
-                    background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '16px',
-                    fontSize: '12px',
-                    color: '#64748b',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Endre PIN
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => { setEditingPin(member.id); setNewPin(member.pin); }}
+                    style={{
+                      padding: '6px 14px',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '16px',
+                      fontSize: '12px',
+                      color: '#64748b',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Endre PIN
+                  </button>
+                  {!member.is_admin && (
+                    <button
+                      onClick={() => deleteUser(member.id)}
+                      style={{
+                        padding: '6px 14px',
+                        background: '#FCEBEB',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: '16px',
+                        fontSize: '12px',
+                        color: '#791F1F',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Slett
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ))}
