@@ -656,7 +656,7 @@ export default function Home() {
           />
         )}
         {activePage === 'library' && (
-          <LibraryPage ads={ads} onUpdate={loadAppData} />
+          <LibraryPage ads={ads} products={products} onUpdate={loadAppData} />
         )}
         {activePage === 'products' && (
           <ProductsPage 
@@ -1149,8 +1149,11 @@ function OrderPage({ products, team, currentUser, onOrderCreated }) {
 // LIBRARY PAGE
 // ============================================
 
-function LibraryPage({ ads, onUpdate }) {
+function LibraryPage({ ads, products, onUpdate }) {
   const [search, setSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState('');
+  const [expandedAd, setExpandedAd] = useState(null);
+  const [copiedField, setCopiedField] = useState(null);
   const [filters, setFilters] = useState({
     status: [],
     performance: [],
@@ -1167,11 +1170,16 @@ function LibraryPage({ ads, onUpdate }) {
 
   function clearFilters() {
     setFilters({ status: [], performance: [] });
+    setSelectedProduct('');
   }
 
   const filteredAds = ads.filter(ad => {
     // Search filter
     if (search && !ad.name.toLowerCase().includes(search.toLowerCase())) {
+      return false;
+    }
+    // Product filter
+    if (selectedProduct && ad.product_id !== parseInt(selectedProduct)) {
       return false;
     }
     // Status filter
@@ -1185,11 +1193,13 @@ function LibraryPage({ ads, onUpdate }) {
     return true;
   });
 
-  const hasFilters = filters.status.length > 0 || filters.performance.length > 0;
+  const hasFilters = filters.status.length > 0 || filters.performance.length > 0 || selectedProduct;
 
-  async function copyToClipboard(text) {
+  async function copyToClipboard(text, fieldName) {
     try {
       await navigator.clipboard.writeText(text);
+      setCopiedField(fieldName);
+      setTimeout(() => setCopiedField(null), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
     }
@@ -1200,6 +1210,11 @@ function LibraryPage({ ads, onUpdate }) {
   const perfLabels = { good: 'Bra', neutral: 'Nøytral', bad: 'Dårlig' };
   const perfStyles = { good: badgeStyles.green, neutral: badgeStyles.gray, bad: badgeStyles.red };
 
+  // Get unique products that have ads
+  const productsWithAds = products.filter(p => 
+    ads.some(a => a.product_id === p.id)
+  );
+
   return (
     <div>
       <input
@@ -1209,6 +1224,18 @@ function LibraryPage({ ads, onUpdate }) {
         placeholder="Søk annonser..."
         style={{ ...styles.input, marginBottom: '12px' }}
       />
+
+      {/* Product filter dropdown */}
+      <select
+        value={selectedProduct}
+        onChange={e => setSelectedProduct(e.target.value)}
+        style={{ ...styles.select, marginBottom: '12px' }}
+      >
+        <option value="">Alle produkter</option>
+        {productsWithAds.map(p => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
 
       {/* Filter tags - all on one line */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1272,73 +1299,128 @@ function LibraryPage({ ads, onUpdate }) {
           <p>Ingen annonser funnet</p>
         </div>
       ) : (
-        filteredAds.map(ad => (
-          <div key={ad.id} style={styles.card}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-              <p style={{ fontSize: '14px', fontWeight: 500 }}>{ad.name}</p>
-              <span style={{ ...styles.badge, ...statusStyles[ad.status] }}>
-                {statusLabels[ad.status]}
-              </span>
-            </div>
-            <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-              {ad.product?.name || 'Ukjent produkt'}
-            </p>
-            <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
-              <span style={{ ...styles.badge, ...badgeStyles.blue }}>
-                {ad.ad_type === 'video' ? 'Video' : 'Bilde'}
-              </span>
-              {ad.performance && (
-                <span style={{ ...styles.badge, ...perfStyles[ad.performance] }}>
-                  {perfLabels[ad.performance]}
+        filteredAds.map(ad => {
+          const isExpanded = expandedAd === ad.id;
+          
+          return (
+            <div 
+              key={ad.id} 
+              style={{
+                ...styles.card,
+                cursor: 'pointer',
+                borderLeft: isExpanded ? '3px solid #185FA5' : '1px solid #E2E8F0',
+              }}
+              onClick={() => setExpandedAd(isExpanded ? null : ad.id)}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                <p style={{ fontSize: '14px', fontWeight: 500 }}>{ad.name}</p>
+                <span style={{ ...styles.badge, ...statusStyles[ad.status] }}>
+                  {statusLabels[ad.status]}
                 </span>
-              )}
-            </div>
-
-            {/* Copy buttons for text */}
-            {(ad.primary_text || ad.headline) && (
-              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #E2E8F0' }}>
-                {ad.primary_text && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '12px', color: '#64748b' }}>Primary Text</span>
-                    <button
-                      onClick={() => copyToClipboard(ad.primary_text)}
-                      style={{
-                        padding: '4px 12px',
-                        background: '#F8FAFC',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '16px',
-                        fontSize: '11px',
-                        color: '#64748b',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Kopier
-                    </button>
-                  </div>
-                )}
-                {ad.headline && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '12px', color: '#64748b' }}>Headline</span>
-                    <button
-                      onClick={() => copyToClipboard(ad.headline)}
-                      style={{
-                        padding: '4px 12px',
-                        background: '#F8FAFC',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '16px',
-                        fontSize: '11px',
-                        color: '#64748b',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Kopier
-                    </button>
-                  </div>
+              </div>
+              <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                {ad.product?.name || 'Ukjent produkt'}
+              </p>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+                <span style={{ ...styles.badge, ...badgeStyles.blue }}>
+                  {ad.ad_type === 'video' ? 'Video' : 'Bilde'}
+                </span>
+                {ad.performance && (
+                  <span style={{ ...styles.badge, ...perfStyles[ad.performance] }}>
+                    {perfLabels[ad.performance]}
+                  </span>
                 )}
               </div>
-            )}
-          </div>
-        ))
+
+              {/* Expanded details */}
+              {isExpanded && (
+                <div 
+                  style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Primary Text */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                        Primary Text
+                      </label>
+                      {ad.primary_text && (
+                        <button
+                          onClick={() => copyToClipboard(ad.primary_text, `primary-${ad.id}`)}
+                          style={{
+                            padding: '4px 12px',
+                            background: copiedField === `primary-${ad.id}` ? '#E1F5EE' : '#F8FAFC',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '16px',
+                            fontSize: '11px',
+                            color: copiedField === `primary-${ad.id}` ? '#085041' : '#64748b',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {copiedField === `primary-${ad.id}` ? '✓ Kopiert!' : 'Kopier'}
+                        </button>
+                      )}
+                    </div>
+                    <div style={{
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      fontSize: '13px',
+                      color: ad.primary_text ? '#1a1a1a' : '#94a3b8',
+                      minHeight: '60px',
+                      whiteSpace: 'pre-wrap',
+                    }}>
+                      {ad.primary_text || 'Ingen tekst'}
+                    </div>
+                  </div>
+
+                  {/* Headline */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                        Headline
+                      </label>
+                      {ad.headline && (
+                        <button
+                          onClick={() => copyToClipboard(ad.headline, `headline-${ad.id}`)}
+                          style={{
+                            padding: '4px 12px',
+                            background: copiedField === `headline-${ad.id}` ? '#E1F5EE' : '#F8FAFC',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '16px',
+                            fontSize: '11px',
+                            color: copiedField === `headline-${ad.id}` ? '#085041' : '#64748b',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {copiedField === `headline-${ad.id}` ? '✓ Kopiert!' : 'Kopier'}
+                        </button>
+                      )}
+                    </div>
+                    <div style={{
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      fontSize: '13px',
+                      color: ad.headline ? '#1a1a1a' : '#94a3b8',
+                    }}>
+                      {ad.headline || 'Ingen overskrift'}
+                    </div>
+                  </div>
+
+                  {/* Created date */}
+                  {ad.completion_date && (
+                    <p style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
+                      Opprettet: {new Date(ad.completion_date).toLocaleDateString('nb-NO')}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })
       )}
     </div>
   );
