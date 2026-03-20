@@ -1686,7 +1686,6 @@ function ProductsPage({ products, ads, onUpdate }) {
 
 function SettingsPage({ team, currentUser, products, onUpdate, onLogout, onTeamUpdate }) {
   const [activeTab, setActiveTab] = useState('team');
-  const [newProductName, setNewProductName] = useState('');
   const [editingPin, setEditingPin] = useState(null);
   const [newPin, setNewPin] = useState('');
   const [newUserName, setNewUserName] = useState('');
@@ -1734,28 +1733,6 @@ function SettingsPage({ team, currentUser, products, onUpdate, onLogout, onTeamU
 
     setNewUserName('');
     onTeamUpdate();
-  }
-
-  async function addProduct() {
-    if (!newProductName.trim()) return;
-
-    await supabase
-      .from('products')
-      .insert({ name: newProductName.trim() });
-
-    setNewProductName('');
-    onUpdate();
-  }
-
-  async function deleteProduct(productId) {
-    if (!confirm('Er du sikker på at du vil slette dette produktet?')) return;
-
-    await supabase
-      .from('products')
-      .delete()
-      .eq('id', productId);
-
-    onUpdate();
   }
 
   async function deleteUser(userId) {
@@ -2090,64 +2067,251 @@ function SettingsPage({ team, currentUser, products, onUpdate, onLogout, onTeamU
 
       {/* Products tab */}
       {activeTab === 'products' && (
-        <div>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            <input
-              type="text"
-              value={newProductName}
-              onChange={e => setNewProductName(e.target.value)}
-              placeholder="Nytt produkt..."
-              style={{ ...styles.input, flex: 1 }}
-            />
-            <button
-              onClick={addProduct}
-              style={{
-                padding: '12px 20px',
-                background: '#1a1a1a',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '24px',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
-            >
-              Legg til
-            </button>
-          </div>
+        <ProductsSettingsTab 
+          products={products} 
+          onUpdate={onUpdate}
+        />
+      )}
+    </div>
+  );
+}
 
-          {products.slice(0, 20).map(product => (
+// ============================================
+// PRODUCTS SETTINGS TAB (separate component)
+// ============================================
+
+function ProductsSettingsTab({ products, onUpdate }) {
+  const [newProductName, setNewProductName] = useState('');
+  const [expandedProduct, setExpandedProduct] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editImageUrl, setEditImageUrl] = useState('');
+  const [search, setSearch] = useState('');
+
+  async function addProduct() {
+    if (!newProductName.trim()) return;
+
+    await supabase
+      .from('products')
+      .insert({ name: newProductName.trim() });
+
+    setNewProductName('');
+    onUpdate();
+  }
+
+  async function deleteProduct(productId) {
+    if (!confirm('Er du sikker på at du vil slette dette produktet? Dette vil også slette alle annonser knyttet til produktet.')) return;
+
+    // First delete related ads
+    await supabase
+      .from('ads')
+      .delete()
+      .eq('product_id', productId);
+
+    // Then delete the product
+    await supabase
+      .from('products')
+      .delete()
+      .eq('id', productId);
+
+    setExpandedProduct(null);
+    onUpdate();
+  }
+
+  async function updateProduct(productId) {
+    const updates = {};
+    if (editName.trim()) updates.name = editName.trim();
+    if (editImageUrl.trim()) updates.image_url = editImageUrl.trim();
+
+    if (Object.keys(updates).length === 0) return;
+
+    await supabase
+      .from('products')
+      .update(updates)
+      .eq('id', productId);
+
+    setExpandedProduct(null);
+    setEditName('');
+    setEditImageUrl('');
+    onUpdate();
+  }
+
+  function openEdit(product) {
+    if (expandedProduct === product.id) {
+      setExpandedProduct(null);
+      setEditName('');
+      setEditImageUrl('');
+    } else {
+      setExpandedProduct(product.id);
+      setEditName(product.name);
+      setEditImageUrl(product.image_url || '');
+    }
+  }
+
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div>
+      {/* Add new product */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        <input
+          type="text"
+          value={newProductName}
+          onChange={e => setNewProductName(e.target.value)}
+          placeholder="Nytt produkt..."
+          style={{ ...styles.input, flex: 1 }}
+        />
+        <button
+          onClick={addProduct}
+          style={{
+            padding: '12px 20px',
+            background: '#1a1a1a',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '24px',
+            fontSize: '14px',
+            fontWeight: 500,
+            cursor: 'pointer',
+          }}
+        >
+          Legg til
+        </button>
+      </div>
+
+      {/* Search */}
+      <input
+        type="text"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Søk produkter..."
+        style={{ ...styles.input, marginBottom: '16px' }}
+      />
+
+      {/* Products list - ALL products */}
+      {filteredProducts.map(product => {
+        const isExpanded = expandedProduct === product.id;
+
+        return (
+          <div
+            key={product.id}
+            style={{
+              ...styles.card,
+              marginBottom: '8px',
+              borderLeft: isExpanded ? '3px solid #185FA5' : '1px solid #E2E8F0',
+            }}
+          >
             <div
-              key={product.id}
               style={{
-                ...styles.card,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                gap: '12px',
+                cursor: 'pointer',
               }}
+              onClick={() => openEdit(product)}
             >
-              <span style={{ fontSize: '14px' }}>{product.name}</span>
-              <button
-                onClick={() => deleteProduct(product.id)}
-                style={{
-                  background: 'none',
-                  border: 'none',
+              {product.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt={product.name}
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '8px',
+                    objectFit: 'cover',
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '8px',
+                  background: '#E8F0FE',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748b',
                   fontSize: '16px',
-                  padding: '4px',
-                  opacity: 0.5,
-                  cursor: 'pointer',
-                }}
-              >
-                🗑
-              </button>
+                }}>
+                  📦
+                </div>
+              )}
+              <span style={{ fontSize: '14px', flex: 1 }}>{product.name}</span>
+              <span style={{ fontSize: '14px', color: '#94a3b8' }}>
+                {isExpanded ? '▲' : '▼'}
+              </span>
             </div>
-          ))}
-          {products.length > 20 && (
-            <p style={{ textAlign: 'center', color: '#64748b', fontSize: '13px', marginTop: '12px' }}>
-              ...og {products.length - 20} flere produkter
-            </p>
-          )}
-        </div>
+
+            {/* Expanded edit form */}
+            {isExpanded && (
+              <div
+                style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                  Produktnavn
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  style={{ ...styles.input, marginBottom: '16px' }}
+                />
+
+                <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                  Bilde-URL (valgfritt)
+                </label>
+                <input
+                  type="text"
+                  value={editImageUrl}
+                  onChange={e => setEditImageUrl(e.target.value)}
+                  placeholder="https://..."
+                  style={{ ...styles.input, marginBottom: '16px' }}
+                />
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => updateProduct(product.id)}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: '#1a1a1a',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '24px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Lagre
+                  </button>
+                  <button
+                    onClick={() => deleteProduct(product.id)}
+                    style={{
+                      padding: '12px 20px',
+                      background: '#FCEBEB',
+                      color: '#791F1F',
+                      border: 'none',
+                      borderRadius: '24px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Slett
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {filteredProducts.length === 0 && (
+        <p style={{ textAlign: 'center', color: '#64748b', fontSize: '13px', marginTop: '20px' }}>
+          Ingen produkter funnet
+        </p>
       )}
     </div>
   );
