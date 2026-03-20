@@ -1173,6 +1173,14 @@ function LibraryPage({ ads, products, onUpdate }) {
     setSelectedProduct('');
   }
 
+  async function updateAd(adId, field, value) {
+    await supabase
+      .from('ads')
+      .update({ [field]: value })
+      .eq('id', adId);
+    onUpdate();
+  }
+
   const filteredAds = ads.filter(ad => {
     // Search filter
     if (search && !ad.name.toLowerCase().includes(search.toLowerCase())) {
@@ -1412,10 +1420,66 @@ function LibraryPage({ ads, products, onUpdate }) {
 
                   {/* Created date */}
                   {ad.completion_date && (
-                    <p style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
+                    <p style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', marginBottom: '16px' }}>
                       Opprettet: {new Date(ad.completion_date).toLocaleDateString('nb-NO')}
                     </p>
                   )}
+
+                  {/* Status selector */}
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                      Status
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {['ready', 'online', 'offline'].map(status => (
+                        <button
+                          key={status}
+                          onClick={() => updateAd(ad.id, 'status', status)}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            borderRadius: '20px',
+                            fontSize: '12px',
+                            border: ad.status === status ? '2px solid #1a1a1a' : '1px solid #E2E8F0',
+                            background: ad.status === status ? statusStyles[status].background : '#fff',
+                            color: ad.status === status ? statusStyles[status].color : '#64748b',
+                            fontWeight: ad.status === status ? 500 : 400,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {statusLabels[status]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Performance selector */}
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                      Ytelse
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {['good', 'neutral', 'bad'].map(perf => (
+                        <button
+                          key={perf}
+                          onClick={() => updateAd(ad.id, 'performance', perf)}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            borderRadius: '20px',
+                            fontSize: '12px',
+                            border: ad.performance === perf ? '2px solid #1a1a1a' : '1px solid #E2E8F0',
+                            background: ad.performance === perf ? perfStyles[perf].background : '#fff',
+                            color: ad.performance === perf ? perfStyles[perf].color : '#64748b',
+                            fontWeight: ad.performance === perf ? 500 : 400,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {perfLabels[perf]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
