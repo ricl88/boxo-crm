@@ -1151,7 +1151,7 @@ function OrderPage({ products, team, currentUser, onOrderCreated }) {
 
 function LibraryPage({ ads, products, onUpdate }) {
   const [search, setSearch] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState('');
+  const [expandedProduct, setExpandedProduct] = useState(null);
   const [expandedAd, setExpandedAd] = useState(null);
   const [copiedField, setCopiedField] = useState(null);
   const [filters, setFilters] = useState({
@@ -1170,7 +1170,7 @@ function LibraryPage({ ads, products, onUpdate }) {
 
   function clearFilters() {
     setFilters({ status: [], performance: [] });
-    setSelectedProduct('');
+    setSearch('');
   }
 
   async function updateAd(adId, field, value) {
@@ -1180,28 +1180,6 @@ function LibraryPage({ ads, products, onUpdate }) {
       .eq('id', adId);
     onUpdate();
   }
-
-  const filteredAds = ads.filter(ad => {
-    // Search filter
-    if (search && !ad.name.toLowerCase().includes(search.toLowerCase())) {
-      return false;
-    }
-    // Product filter
-    if (selectedProduct && ad.product_id !== parseInt(selectedProduct)) {
-      return false;
-    }
-    // Status filter
-    if (filters.status.length > 0 && !filters.status.includes(ad.status)) {
-      return false;
-    }
-    // Performance filter
-    if (filters.performance.length > 0 && !filters.performance.includes(ad.performance)) {
-      return false;
-    }
-    return true;
-  });
-
-  const hasFilters = filters.status.length > 0 || filters.performance.length > 0 || selectedProduct;
 
   async function copyToClipboard(text, fieldName) {
     try {
@@ -1217,11 +1195,62 @@ function LibraryPage({ ads, products, onUpdate }) {
   const statusStyles = { ready: badgeStyles.blue, online: badgeStyles.green, offline: badgeStyles.gray };
   const perfLabels = { good: 'Bra', neutral: 'Nøytral', bad: 'Dårlig' };
   const perfStyles = { good: badgeStyles.green, neutral: badgeStyles.gray, bad: badgeStyles.red };
+  const perfColors = { good: '#5DCAA5', neutral: '#EF9F27', bad: '#E24B4A' };
 
-  // Get unique products that have ads
-  const productsWithAds = products.filter(p => 
-    ads.some(a => a.product_id === p.id)
-  );
+  const hasFilters = filters.status.length > 0 || filters.performance.length > 0 || search;
+
+  // Filter ads based on search, status, and performance
+  function getFilteredAdsForProduct(productId) {
+    return ads.filter(ad => {
+      // Must belong to this product
+      if (ad.product_id !== productId) return false;
+      
+      // Search filter - check ad name
+      if (search && !ad.name.toLowerCase().includes(search.toLowerCase())) {
+        // Also check if product name matches
+        const product = products.find(p => p.id === productId);
+        if (!product || !product.name.toLowerCase().includes(search.toLowerCase())) {
+          return false;
+        }
+      }
+      
+      // Status filter
+      if (filters.status.length > 0 && !filters.status.includes(ad.status)) {
+        return false;
+      }
+      
+      // Performance filter
+      if (filters.performance.length > 0 && !filters.performance.includes(ad.performance)) {
+        return false;
+      }
+      
+      return true;
+    });
+  }
+
+  // Get products that have matching ads after filtering
+  const productsWithFilteredAds = products.filter(product => {
+    const filteredAds = getFilteredAdsForProduct(product.id);
+    return filteredAds.length > 0;
+  });
+
+  // Calculate performance distribution for a product's filtered ads
+  function getPerformanceDistribution(productId) {
+    const filteredAds = getFilteredAdsForProduct(productId);
+    const total = filteredAds.length;
+    if (total === 0) return { good: 0, neutral: 0, bad: 0 };
+    
+    const good = filteredAds.filter(a => a.performance === 'good').length;
+    const neutral = filteredAds.filter(a => a.performance === 'neutral').length;
+    const bad = filteredAds.filter(a => a.performance === 'bad').length;
+    const noPerf = total - good - neutral - bad;
+    
+    return {
+      good: (good / total) * 100,
+      neutral: ((neutral + noPerf) / total) * 100, // Treat no performance as neutral
+      bad: (bad / total) * 100,
+    };
+  }
 
   return (
     <div>
@@ -1229,23 +1258,11 @@ function LibraryPage({ ads, products, onUpdate }) {
         type="text"
         value={search}
         onChange={e => setSearch(e.target.value)}
-        placeholder="Søk annonser..."
+        placeholder="Søk produkter eller annonser..."
         style={{ ...styles.input, marginBottom: '12px' }}
       />
 
-      {/* Product filter dropdown */}
-      <select
-        value={selectedProduct}
-        onChange={e => setSelectedProduct(e.target.value)}
-        style={{ ...styles.select, marginBottom: '12px' }}
-      >
-        <option value="">Alle produkter</option>
-        {productsWithAds.map(p => (
-          <option key={p.id} value={p.id}>{p.name}</option>
-        ))}
-      </select>
-
-      {/* Filter tags - all on one line */}
+      {/* Filter tags */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
         {['online', 'ready', 'offline'].map(status => (
           <button
@@ -1301,185 +1318,281 @@ function LibraryPage({ ads, products, onUpdate }) {
         )}
       </div>
 
-      {/* Ads list */}
-      {filteredAds.length === 0 ? (
+      {/* Products list */}
+      {productsWithFilteredAds.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
           <p>Ingen annonser funnet</p>
         </div>
       ) : (
-        filteredAds.map(ad => {
-          const isExpanded = expandedAd === ad.id;
-          
+        productsWithFilteredAds.map(product => {
+          const filteredAds = getFilteredAdsForProduct(product.id);
+          const adCount = filteredAds.length;
+          const isExpanded = expandedProduct === product.id;
+          const distribution = getPerformanceDistribution(product.id);
+
           return (
-            <div 
-              key={ad.id} 
-              style={{
-                ...styles.card,
-                cursor: 'pointer',
-                borderLeft: isExpanded ? '3px solid #185FA5' : '1px solid #E2E8F0',
-              }}
-              onClick={() => setExpandedAd(isExpanded ? null : ad.id)}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                <p style={{ fontSize: '14px', fontWeight: 500 }}>{ad.name}</p>
-                <span style={{ ...styles.badge, ...statusStyles[ad.status] }}>
-                  {statusLabels[ad.status]}
-                </span>
-              </div>
-              <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                {ad.product?.name || 'Ukjent produkt'}
-              </p>
-              <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
-                <span style={{ ...styles.badge, ...badgeStyles.blue }}>
-                  {ad.ad_type === 'video' ? 'Video' : 'Bilde'}
-                </span>
-                {ad.performance && (
-                  <span style={{ ...styles.badge, ...perfStyles[ad.performance] }}>
-                    {perfLabels[ad.performance]}
-                  </span>
+            <div key={product.id} style={{ marginBottom: '10px' }}>
+              {/* Product card */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '14px',
+                  background: '#fff',
+                  border: isExpanded ? '2px solid #1a1a1a' : '1px solid #E2E8F0',
+                  borderRadius: '16px',
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  setExpandedProduct(isExpanded ? null : product.id);
+                  setExpandedAd(null);
+                }}
+              >
+                {product.image_url ? (
+                  <img
+                    src={product.image_url}
+                    alt={product.name}
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '12px',
+                      objectFit: 'cover',
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '12px',
+                    background: '#E8F0FE',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#64748b',
+                    fontSize: '20px',
+                  }}>
+                    📦
+                  </div>
                 )}
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: '14px', fontWeight: 500 }}>{product.name}</p>
+                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                    {adCount} {adCount === 1 ? 'annonse' : 'annonser'}
+                  </p>
+                  {/* Performance distribution bar */}
+                  <div style={{
+                    height: '6px',
+                    borderRadius: '3px',
+                    marginTop: '8px',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    background: '#E2E8F0',
+                  }}>
+                    {distribution.good > 0 && (
+                      <div style={{
+                        width: `${distribution.good}%`,
+                        background: perfColors.good,
+                      }} />
+                    )}
+                    {distribution.neutral > 0 && (
+                      <div style={{
+                        width: `${distribution.neutral}%`,
+                        background: perfColors.neutral,
+                      }} />
+                    )}
+                    {distribution.bad > 0 && (
+                      <div style={{
+                        width: `${distribution.bad}%`,
+                        background: perfColors.bad,
+                      }} />
+                    )}
+                  </div>
+                </div>
+                <span style={{ fontSize: '18px', color: '#94a3b8' }}>
+                  {isExpanded ? '▲' : '▼'}
+                </span>
               </div>
 
-              {/* Expanded details */}
+              {/* Expanded ads list */}
               {isExpanded && (
-                <div 
-                  style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  {/* Primary Text */}
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-                        Primary Text
-                      </label>
-                      {ad.primary_text && (
-                        <button
-                          onClick={() => copyToClipboard(ad.primary_text, `primary-${ad.id}`)}
-                          style={{
-                            padding: '4px 12px',
-                            background: copiedField === `primary-${ad.id}` ? '#E1F5EE' : '#F8FAFC',
-                            border: '1px solid #E2E8F0',
-                            borderRadius: '16px',
-                            fontSize: '11px',
-                            color: copiedField === `primary-${ad.id}` ? '#085041' : '#64748b',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {copiedField === `primary-${ad.id}` ? '✓ Kopiert!' : 'Kopier'}
-                        </button>
-                      )}
-                    </div>
-                    <div style={{
-                      background: '#F8FAFC',
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '12px',
-                      padding: '12px',
-                      fontSize: '13px',
-                      color: ad.primary_text ? '#1a1a1a' : '#94a3b8',
-                      minHeight: '60px',
-                      whiteSpace: 'pre-wrap',
-                    }}>
-                      {ad.primary_text || 'Ingen tekst'}
-                    </div>
-                  </div>
+                <div style={{ paddingLeft: '20px', marginTop: '8px' }}>
+                  {filteredAds.map(ad => {
+                    const isAdExpanded = expandedAd === ad.id;
 
-                  {/* Headline */}
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-                        Headline
-                      </label>
-                      {ad.headline && (
-                        <button
-                          onClick={() => copyToClipboard(ad.headline, `headline-${ad.id}`)}
-                          style={{
-                            padding: '4px 12px',
-                            background: copiedField === `headline-${ad.id}` ? '#E1F5EE' : '#F8FAFC',
-                            border: '1px solid #E2E8F0',
-                            borderRadius: '16px',
-                            fontSize: '11px',
-                            color: copiedField === `headline-${ad.id}` ? '#085041' : '#64748b',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {copiedField === `headline-${ad.id}` ? '✓ Kopiert!' : 'Kopier'}
-                        </button>
-                      )}
-                    </div>
-                    <div style={{
-                      background: '#F8FAFC',
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '12px',
-                      padding: '12px',
-                      fontSize: '13px',
-                      color: ad.headline ? '#1a1a1a' : '#94a3b8',
-                    }}>
-                      {ad.headline || 'Ingen overskrift'}
-                    </div>
-                  </div>
+                    return (
+                      <div
+                        key={ad.id}
+                        style={{
+                          ...styles.card,
+                          marginBottom: '8px',
+                          borderLeft: isAdExpanded ? '3px solid #185FA5' : '3px solid #E8F0FE',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setExpandedAd(isAdExpanded ? null : ad.id)}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                          <p style={{ fontSize: '14px', fontWeight: 500 }}>{ad.name}</p>
+                          <span style={{ ...styles.badge, ...statusStyles[ad.status] }}>
+                            {statusLabels[ad.status]}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                          <span style={{ ...styles.badge, ...badgeStyles.blue }}>
+                            {ad.ad_type === 'video' ? 'Video' : 'Bilde'}
+                          </span>
+                          {ad.performance && (
+                            <span style={{ ...styles.badge, ...perfStyles[ad.performance] }}>
+                              {perfLabels[ad.performance]}
+                            </span>
+                          )}
+                        </div>
 
-                  {/* Created date */}
-                  {ad.completion_date && (
-                    <p style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', marginBottom: '16px' }}>
-                      Opprettet: {new Date(ad.completion_date).toLocaleDateString('nb-NO')}
-                    </p>
-                  )}
+                        {/* Expanded ad details */}
+                        {isAdExpanded && (
+                          <div
+                            style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {/* Primary Text */}
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                                  Primary Text
+                                </label>
+                                {ad.primary_text && (
+                                  <button
+                                    onClick={() => copyToClipboard(ad.primary_text, `primary-${ad.id}`)}
+                                    style={{
+                                      padding: '4px 12px',
+                                      background: copiedField === `primary-${ad.id}` ? '#E1F5EE' : '#F8FAFC',
+                                      border: '1px solid #E2E8F0',
+                                      borderRadius: '16px',
+                                      fontSize: '11px',
+                                      color: copiedField === `primary-${ad.id}` ? '#085041' : '#64748b',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {copiedField === `primary-${ad.id}` ? '✓ Kopiert!' : 'Kopier'}
+                                  </button>
+                                )}
+                              </div>
+                              <div style={{
+                                background: '#F8FAFC',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '12px',
+                                padding: '12px',
+                                fontSize: '13px',
+                                color: ad.primary_text ? '#1a1a1a' : '#94a3b8',
+                                minHeight: '60px',
+                                whiteSpace: 'pre-wrap',
+                              }}>
+                                {ad.primary_text || 'Ingen tekst'}
+                              </div>
+                            </div>
 
-                  {/* Status selector */}
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
-                      Status
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {['ready', 'online', 'offline'].map(status => (
-                        <button
-                          key={status}
-                          onClick={() => updateAd(ad.id, 'status', status)}
-                          style={{
-                            flex: 1,
-                            padding: '10px',
-                            borderRadius: '20px',
-                            fontSize: '12px',
-                            border: ad.status === status ? '2px solid #1a1a1a' : '1px solid #E2E8F0',
-                            background: ad.status === status ? statusStyles[status].background : '#fff',
-                            color: ad.status === status ? statusStyles[status].color : '#64748b',
-                            fontWeight: ad.status === status ? 500 : 400,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {statusLabels[status]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                            {/* Headline */}
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                                  Headline
+                                </label>
+                                {ad.headline && (
+                                  <button
+                                    onClick={() => copyToClipboard(ad.headline, `headline-${ad.id}`)}
+                                    style={{
+                                      padding: '4px 12px',
+                                      background: copiedField === `headline-${ad.id}` ? '#E1F5EE' : '#F8FAFC',
+                                      border: '1px solid #E2E8F0',
+                                      borderRadius: '16px',
+                                      fontSize: '11px',
+                                      color: copiedField === `headline-${ad.id}` ? '#085041' : '#64748b',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {copiedField === `headline-${ad.id}` ? '✓ Kopiert!' : 'Kopier'}
+                                  </button>
+                                )}
+                              </div>
+                              <div style={{
+                                background: '#F8FAFC',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '12px',
+                                padding: '12px',
+                                fontSize: '13px',
+                                color: ad.headline ? '#1a1a1a' : '#94a3b8',
+                              }}>
+                                {ad.headline || 'Ingen overskrift'}
+                              </div>
+                            </div>
 
-                  {/* Performance selector */}
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
-                      Ytelse
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {['good', 'neutral', 'bad'].map(perf => (
-                        <button
-                          key={perf}
-                          onClick={() => updateAd(ad.id, 'performance', perf)}
-                          style={{
-                            flex: 1,
-                            padding: '10px',
-                            borderRadius: '20px',
-                            fontSize: '12px',
-                            border: ad.performance === perf ? '2px solid #1a1a1a' : '1px solid #E2E8F0',
-                            background: ad.performance === perf ? perfStyles[perf].background : '#fff',
-                            color: ad.performance === perf ? perfStyles[perf].color : '#64748b',
-                            fontWeight: ad.performance === perf ? 500 : 400,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {perfLabels[perf]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                            {/* Created date */}
+                            {ad.completion_date && (
+                              <p style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', marginBottom: '16px' }}>
+                                Opprettet: {new Date(ad.completion_date).toLocaleDateString('nb-NO')}
+                              </p>
+                            )}
+
+                            {/* Status selector */}
+                            <div style={{ marginBottom: '12px' }}>
+                              <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                                Status
+                              </label>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                {['ready', 'online', 'offline'].map(status => (
+                                  <button
+                                    key={status}
+                                    onClick={() => updateAd(ad.id, 'status', status)}
+                                    style={{
+                                      flex: 1,
+                                      padding: '10px',
+                                      borderRadius: '20px',
+                                      fontSize: '12px',
+                                      border: ad.status === status ? '2px solid #1a1a1a' : '1px solid #E2E8F0',
+                                      background: ad.status === status ? statusStyles[status].background : '#fff',
+                                      color: ad.status === status ? statusStyles[status].color : '#64748b',
+                                      fontWeight: ad.status === status ? 500 : 400,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {statusLabels[status]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Performance selector */}
+                            <div>
+                              <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                                Ytelse
+                              </label>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                {['good', 'neutral', 'bad'].map(perf => (
+                                  <button
+                                    key={perf}
+                                    onClick={() => updateAd(ad.id, 'performance', perf)}
+                                    style={{
+                                      flex: 1,
+                                      padding: '10px',
+                                      borderRadius: '20px',
+                                      fontSize: '12px',
+                                      border: ad.performance === perf ? '2px solid #1a1a1a' : '1px solid #E2E8F0',
+                                      background: ad.performance === perf ? perfStyles[perf].background : '#fff',
+                                      color: ad.performance === perf ? perfStyles[perf].color : '#64748b',
+                                      fontWeight: ad.performance === perf ? 500 : 400,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {perfLabels[perf]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
