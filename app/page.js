@@ -1421,9 +1421,35 @@ function LibraryPage({ ads, products, onUpdate }) {
                 )}
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: '14px', fontWeight: 500 }}>{product.name}</p>
-                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                    {adCount} {adCount === 1 ? 'annonse' : 'annonser'}
-                  </p>
+                  {/* Status counts */}
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                    {(() => {
+                      const statusCounts = {
+                        online: filteredAds.filter(a => a.status === 'online').length,
+                        ready: filteredAds.filter(a => a.status === 'ready').length,
+                        offline: filteredAds.filter(a => a.status === 'offline').length,
+                      };
+                      return (
+                        <>
+                          {statusCounts.online > 0 && (
+                            <span style={{ fontSize: '11px', color: '#085041', background: '#E1F5EE', padding: '2px 8px', borderRadius: '10px' }}>
+                              {statusCounts.online} online
+                            </span>
+                          )}
+                          {statusCounts.ready > 0 && (
+                            <span style={{ fontSize: '11px', color: '#185FA5', background: '#E8F0FE', padding: '2px 8px', borderRadius: '10px' }}>
+                              {statusCounts.ready} klar
+                            </span>
+                          )}
+                          {statusCounts.offline > 0 && (
+                            <span style={{ fontSize: '11px', color: '#64748b', background: '#F1F5F9', padding: '2px 8px', borderRadius: '10px' }}>
+                              {statusCounts.offline} offline
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
                   {/* Performance distribution bar */}
                   <div style={{
                     height: '6px',
@@ -1479,6 +1505,19 @@ function LibraryPage({ ads, products, onUpdate }) {
                           <p style={{ fontSize: '14px', fontWeight: 500 }}>{ad.name}</p>
                           <span style={{ ...styles.badge, ...statusStyles[ad.status] }}>
                             {statusLabels[ad.status]}
+                          </span>
+                        </div>
+                        {/* Adspend and ROAS */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                          <span style={{ fontSize: '12px', color: '#64748b' }}>Adspend:</span>
+                          <span style={{ ...styles.badge, background: '#F0F4FF', color: '#3B5998' }}>
+                            {ad.spend ? Math.round(ad.spend / 7) : 0} kr
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                          <span style={{ fontSize: '12px', color: '#64748b' }}>ROAS:</span>
+                          <span style={{ ...styles.badge, background: ad.roas >= 4 ? '#E1F5EE' : ad.roas >= 3 ? '#FEF3E2' : '#FCEBEB', color: ad.roas >= 4 ? '#085041' : ad.roas >= 3 ? '#92400E' : '#791F1F' }}>
+                            {ad.roas ? ad.roas.toFixed(2) : '0.00'}
                           </span>
                         </div>
                         <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
