@@ -1503,22 +1503,23 @@ function LibraryPage({ ads, products, onUpdate }) {
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                           <p style={{ fontSize: '14px', fontWeight: 500 }}>{ad.name}</p>
-                          <span style={{ ...styles.badge, ...statusStyles[ad.status] }}>
-                            {statusLabels[ad.status]}
-                          </span>
-                        </div>
-                        {/* Adspend and ROAS */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                          <span style={{ fontSize: '12px', color: '#64748b' }}>Adspend:</span>
-                          <span style={{ ...styles.badge, background: '#F0F4FF', color: '#3B5998' }}>
-                            {ad.spend ? Math.round(ad.spend / 7) : 0} kr
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-                          <span style={{ fontSize: '12px', color: '#64748b' }}>ROAS:</span>
-                          <span style={{ ...styles.badge, background: ad.roas >= 4 ? '#E1F5EE' : ad.roas >= 3 ? '#FEF3E2' : '#FCEBEB', color: ad.roas >= 4 ? '#085041' : ad.roas >= 3 ? '#92400E' : '#791F1F' }}>
-                            {ad.roas ? ad.roas.toFixed(2) : '0.00'}
-                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                            <span style={{ ...styles.badge, ...statusStyles[ad.status], minWidth: '70px', textAlign: 'center' }}>
+                              {statusLabels[ad.status]}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>Adspend:</span>
+                              <span style={{ ...styles.badge, background: '#F0F4FF', color: '#3B5998', minWidth: '70px', textAlign: 'center' }}>
+                                {ad.spend ? Math.round(ad.spend / 7) : 0} kr
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>ROAS:</span>
+                              <span style={{ ...styles.badge, background: ad.roas >= 4 ? '#E1F5EE' : ad.roas >= 3 ? '#FEF3E2' : '#FCEBEB', color: ad.roas >= 4 ? '#085041' : ad.roas >= 3 ? '#92400E' : '#791F1F', minWidth: '70px', textAlign: 'center' }}>
+                                {ad.roas ? ad.roas.toFixed(2) : '0.00'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                         <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
                           <span style={{ ...styles.badge, ...badgeStyles.blue }}>
