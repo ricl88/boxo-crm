@@ -1154,6 +1154,10 @@ function LibraryPage({ ads, products, onUpdate }) {
   const [expandedProduct, setExpandedProduct] = useState(null);
   const [expandedAd, setExpandedAd] = useState(null);
   const [copiedField, setCopiedField] = useState(null);
+  const [editingAd, setEditingAd] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editPrimaryText, setEditPrimaryText] = useState('');
+  const [editHeadline, setEditHeadline] = useState('');
   const [filters, setFilters] = useState({
     status: [],
     performance: [],
@@ -1179,6 +1183,46 @@ function LibraryPage({ ads, products, onUpdate }) {
       .update({ [field]: value })
       .eq('id', adId);
     onUpdate();
+  }
+
+  async function saveAdChanges(adId) {
+    await supabase
+      .from('ads')
+      .update({
+        name: editName,
+        primary_text: editPrimaryText,
+        headline: editHeadline,
+      })
+      .eq('id', adId);
+    setEditingAd(null);
+    onUpdate();
+  }
+
+  async function deleteAd(adId) {
+    if (!confirm('Er du sikker på at du vil slette denne annonsen?')) return;
+    
+    await supabase
+      .from('ads')
+      .delete()
+      .eq('id', adId);
+    
+    setExpandedAd(null);
+    setEditingAd(null);
+    onUpdate();
+  }
+
+  function startEditing(ad) {
+    setEditingAd(ad.id);
+    setEditName(ad.name || '');
+    setEditPrimaryText(ad.primary_text || '');
+    setEditHeadline(ad.headline || '');
+  }
+
+  function cancelEditing() {
+    setEditingAd(null);
+    setEditName('');
+    setEditPrimaryText('');
+    setEditHeadline('');
   }
 
   async function copyToClipboard(text, fieldName) {
@@ -1454,77 +1498,177 @@ function LibraryPage({ ads, products, onUpdate }) {
                             style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}
                             onClick={e => e.stopPropagation()}
                           >
-                            {/* Primary Text */}
-                            <div style={{ marginBottom: '16px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-                                  Primary Text
-                                </label>
-                                {ad.primary_text && (
-                                  <button
-                                    onClick={() => copyToClipboard(ad.primary_text, `primary-${ad.id}`)}
-                                    style={{
-                                      padding: '4px 12px',
-                                      background: copiedField === `primary-${ad.id}` ? '#E1F5EE' : '#F8FAFC',
-                                      border: '1px solid #E2E8F0',
-                                      borderRadius: '16px',
-                                      fontSize: '11px',
-                                      color: copiedField === `primary-${ad.id}` ? '#085041' : '#64748b',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    {copiedField === `primary-${ad.id}` ? '✓ Kopiert!' : 'Kopier'}
-                                  </button>
-                                )}
-                              </div>
-                              <div style={{
-                                background: '#F8FAFC',
-                                border: '1px solid #E2E8F0',
-                                borderRadius: '12px',
-                                padding: '12px',
-                                fontSize: '13px',
-                                color: ad.primary_text ? '#1a1a1a' : '#94a3b8',
-                                minHeight: '60px',
-                                whiteSpace: 'pre-wrap',
-                              }}>
-                                {ad.primary_text || 'Ingen tekst'}
-                              </div>
-                            </div>
+                            {/* Edit mode */}
+                            {editingAd === ad.id ? (
+                              <>
+                                {/* Ad Name */}
+                                <div style={{ marginBottom: '16px' }}>
+                                  <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                                    Annonsenavn
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editName}
+                                    onChange={e => setEditName(e.target.value)}
+                                    style={{ ...styles.input }}
+                                  />
+                                </div>
 
-                            {/* Headline */}
-                            <div style={{ marginBottom: '16px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-                                  Headline
-                                </label>
-                                {ad.headline && (
+                                {/* Primary Text */}
+                                <div style={{ marginBottom: '16px' }}>
+                                  <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                                    Primary Text
+                                  </label>
+                                  <textarea
+                                    value={editPrimaryText}
+                                    onChange={e => setEditPrimaryText(e.target.value)}
+                                    placeholder="Skriv annonsetekst..."
+                                    style={{ ...styles.input, minHeight: '100px', resize: 'vertical', borderRadius: '16px' }}
+                                  />
+                                </div>
+
+                                {/* Headline */}
+                                <div style={{ marginBottom: '16px' }}>
+                                  <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                                    Headline
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editHeadline}
+                                    onChange={e => setEditHeadline(e.target.value)}
+                                    placeholder="Skriv overskrift..."
+                                    style={{ ...styles.input }}
+                                  />
+                                </div>
+
+                                {/* Save/Cancel buttons */}
+                                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                                   <button
-                                    onClick={() => copyToClipboard(ad.headline, `headline-${ad.id}`)}
+                                    onClick={() => saveAdChanges(ad.id)}
                                     style={{
-                                      padding: '4px 12px',
-                                      background: copiedField === `headline-${ad.id}` ? '#E1F5EE' : '#F8FAFC',
-                                      border: '1px solid #E2E8F0',
-                                      borderRadius: '16px',
-                                      fontSize: '11px',
-                                      color: copiedField === `headline-${ad.id}` ? '#085041' : '#64748b',
+                                      flex: 1,
+                                      padding: '12px',
+                                      background: '#1a1a1a',
+                                      color: '#fff',
+                                      border: 'none',
+                                      borderRadius: '24px',
+                                      fontSize: '14px',
+                                      fontWeight: 500,
                                       cursor: 'pointer',
                                     }}
                                   >
-                                    {copiedField === `headline-${ad.id}` ? '✓ Kopiert!' : 'Kopier'}
+                                    Lagre
                                   </button>
-                                )}
-                              </div>
-                              <div style={{
-                                background: '#F8FAFC',
-                                border: '1px solid #E2E8F0',
-                                borderRadius: '12px',
-                                padding: '12px',
-                                fontSize: '13px',
-                                color: ad.headline ? '#1a1a1a' : '#94a3b8',
-                              }}>
-                                {ad.headline || 'Ingen overskrift'}
-                              </div>
-                            </div>
+                                  <button
+                                    onClick={cancelEditing}
+                                    style={{
+                                      padding: '12px 20px',
+                                      background: '#F8FAFC',
+                                      color: '#64748b',
+                                      border: '1px solid #E2E8F0',
+                                      borderRadius: '24px',
+                                      fontSize: '14px',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Avbryt
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {/* View mode - Primary Text */}
+                                <div style={{ marginBottom: '16px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                                      Primary Text
+                                    </label>
+                                    {ad.primary_text && (
+                                      <button
+                                        onClick={() => copyToClipboard(ad.primary_text, `primary-${ad.id}`)}
+                                        style={{
+                                          padding: '4px 12px',
+                                          background: copiedField === `primary-${ad.id}` ? '#E1F5EE' : '#F8FAFC',
+                                          border: '1px solid #E2E8F0',
+                                          borderRadius: '16px',
+                                          fontSize: '11px',
+                                          color: copiedField === `primary-${ad.id}` ? '#085041' : '#64748b',
+                                          cursor: 'pointer',
+                                        }}
+                                      >
+                                        {copiedField === `primary-${ad.id}` ? '✓ Kopiert!' : 'Kopier'}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div style={{
+                                    background: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '12px',
+                                    padding: '12px',
+                                    fontSize: '13px',
+                                    color: ad.primary_text ? '#1a1a1a' : '#94a3b8',
+                                    minHeight: '60px',
+                                    whiteSpace: 'pre-wrap',
+                                  }}>
+                                    {ad.primary_text || 'Ingen tekst'}
+                                  </div>
+                                </div>
+
+                                {/* View mode - Headline */}
+                                <div style={{ marginBottom: '16px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                                      Headline
+                                    </label>
+                                    {ad.headline && (
+                                      <button
+                                        onClick={() => copyToClipboard(ad.headline, `headline-${ad.id}`)}
+                                        style={{
+                                          padding: '4px 12px',
+                                          background: copiedField === `headline-${ad.id}` ? '#E1F5EE' : '#F8FAFC',
+                                          border: '1px solid #E2E8F0',
+                                          borderRadius: '16px',
+                                          fontSize: '11px',
+                                          color: copiedField === `headline-${ad.id}` ? '#085041' : '#64748b',
+                                          cursor: 'pointer',
+                                        }}
+                                      >
+                                        {copiedField === `headline-${ad.id}` ? '✓ Kopiert!' : 'Kopier'}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div style={{
+                                    background: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '12px',
+                                    padding: '12px',
+                                    fontSize: '13px',
+                                    color: ad.headline ? '#1a1a1a' : '#94a3b8',
+                                  }}>
+                                    {ad.headline || 'Ingen overskrift'}
+                                  </div>
+                                </div>
+
+                                {/* Edit button */}
+                                <button
+                                  onClick={() => startEditing(ad)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '12px',
+                                    background: '#E8F0FE',
+                                    color: '#185FA5',
+                                    border: 'none',
+                                    borderRadius: '24px',
+                                    fontSize: '14px',
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    marginBottom: '16px',
+                                  }}
+                                >
+                                  ✏️ Rediger tekst
+                                </button>
+                              </>
+                            )}
 
                             {/* Created date */}
                             {ad.completion_date && (
@@ -1562,7 +1706,7 @@ function LibraryPage({ ads, products, onUpdate }) {
                             </div>
 
                             {/* Performance selector */}
-                            <div>
+                            <div style={{ marginBottom: '16px' }}>
                               <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
                                 Ytelse
                               </label>
@@ -1588,6 +1732,24 @@ function LibraryPage({ ads, products, onUpdate }) {
                                 ))}
                               </div>
                             </div>
+
+                            {/* Delete button */}
+                            <button
+                              onClick={() => deleteAd(ad.id)}
+                              style={{
+                                width: '100%',
+                                padding: '12px',
+                                background: '#FCEBEB',
+                                color: '#791F1F',
+                                border: 'none',
+                                borderRadius: '24px',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              🗑 Slett annonse
+                            </button>
                           </div>
                         )}
                       </div>
