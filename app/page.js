@@ -1272,11 +1272,18 @@ function LibraryPage({ ads, products, onUpdate }) {
     });
   }
 
-  // Get products that have matching ads after filtering
-  const productsWithFilteredAds = products.filter(product => {
-    const filteredAds = getFilteredAdsForProduct(product.id);
-    return filteredAds.length > 0;
-  });
+  // Get products that have matching ads after filtering, sorted by total spend
+  const productsWithFilteredAds = products
+    .filter(product => {
+      const filteredAds = getFilteredAdsForProduct(product.id);
+      return filteredAds.length > 0;
+    })
+    .map(product => {
+      const filteredAds = getFilteredAdsForProduct(product.id);
+      const totalSpend = filteredAds.reduce((sum, ad) => sum + (ad.spend || 0), 0);
+      return { ...product, totalSpend };
+    })
+    .sort((a, b) => b.totalSpend - a.totalSpend);
 
   // Calculate performance distribution for a product's filtered ads
   function getPerformanceDistribution(productId) {
@@ -1487,7 +1494,7 @@ function LibraryPage({ ads, products, onUpdate }) {
               {/* Expanded ads list */}
               {isExpanded && (
                 <div style={{ paddingLeft: '20px', marginTop: '8px' }}>
-                  {filteredAds.map(ad => {
+                  {filteredAds.sort((a, b) => (b.spend || 0) - (a.spend || 0)).map(ad => {
                     const isAdExpanded = expandedAd === ad.id;
 
                     return (
